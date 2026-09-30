@@ -41,6 +41,7 @@ final class AppDatabase {
         exec("PRAGMA journal_mode=WAL;")
         exec("PRAGMA foreign_keys=ON;")
         createTables()
+        migrate()
     }
 
     private func createTables() {
@@ -54,6 +55,7 @@ final class AppDatabase {
             model TEXT DEFAULT '',
             status TEXT DEFAULT '',
             metadata_json TEXT DEFAULT '{}',
+            note TEXT DEFAULT '',
             last_seen_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL)
@@ -109,6 +111,25 @@ final class AppDatabase {
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_readings_meter ON readings(meter_id, recorded_at DESC)")
         exec("CREATE INDEX IF NOT EXISTS idx_snapshots_reading ON metric_snapshots(reading_id)")
+    }
+
+    /// 幂等迁移：老版本的库没有 meters.note 列，这里补上。
+    /// 只加列、不动已有数据，所以已经装过旧版的手机会保留全部记录。
+    private func migrate() {
+        if !columnExists("meters", "note") {
+            exec("ALTER TABLE meters ADD COLUMN note TEXT DEFAULT ''")
+            NSLog("[MeterReader] migrated: added meters.note")
+        }
+    }
+
+    /// PRAGMA table_info 的第 1 列是列名。
+    private func columnExists(_ table: String, _ column: String) -> Bool {
+        guard let stmt = prepare("PRAGMA table_info(\(table))") else { return false }
+        defer { sqlite3_finalize(stmt) }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if string(stmt, 1) == column { return true }
+        }
+        return false
     }
 
     // MARK: - Low level helpers
@@ -199,7 +220,7 @@ final class AppDatabase {
             var out: [Meter] = []
             let sql = """
             SELECT id,serial_number,display_name,location,type,model,status,metadata_json,
-                   last_seen_at,created_at,updated_at
+                   note,last_seen_at,created_at,updated_at
             FROM meters ORDER BY display_name
             """
             guard let stmt = prepare(sql) else { return [] }
@@ -214,9 +235,10 @@ final class AppDatabase {
                     model: string(stmt, 5),
                     status: string(stmt, 6),
                     metadataJson: string(stmt, 7),
-                    lastSeenAt: stringOrNil(stmt, 8),
-                    createdAt: string(stmt, 9),
-                    updatedAt: string(stmt, 10)))
+                    note: string(stmt, 8),
+                    lastSeenAt: stringOrNil(stmt, 9),
+                    createdAt: string(stmt, 10),
+                    updatedAt: string(stmt, 11)))
             }
             return out
         }
@@ -231,8 +253,8 @@ final class AppDatabase {
             let now = Timestamps.now()
             run("""
             INSERT INTO meters(id,serial_number,display_name,location,type,model,status,
-                               metadata_json,last_seen_at,created_at,updated_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                               metadata_json,note,last_seen_at,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(id) DO UPDATE SET
                 serial_number=excluded.serial_number,
                 display_name=excluded.display_name,
@@ -241,11 +263,40 @@ final class AppDatabase {
                 model=excluded.model,
                 status=excluded.status,
                 metadata_json=excluded.metadata_json,
+                note=CASE WHEN excluded.note IS NULL OR excluded.note = ''
+                          THEN meters.note ELSE excluded.note END,
                 last_seen_at=excluded.last_seen_at,
                 updated_at=excluded.updated_at
             """, [meter.id, meter.serialNumber, meter.displayName, meter.location,
                   meter.type, meter.model, meter.status, meter.metadataJson,
-                  meter.lastSeenAt, meter.createdAt.isEmpty ? now : meter.createdAt, now])
+                  meter.note, meter.lastSeenAt,
+                  meter.createdAt.isEmpty ? now : meter.createdAt, now])
+        }
+    }
+
+    /// 修改设备的显示名称与人工备注。传入 nil 表示该字段不动。
+    /// 与 upsertMeter 不同，这里用直接 UPDATE，所以**可以清空备注**。
+    func updateMeterInfo(id: String, displayName: String? = nil, note: String? = nil) {
+        queue.sync {
+            var sets: [String] = ["updated_at=?"]
+            var args: [Any?] = [Timestamps.now()]
+            if let displayName = displayName {
+                sets.append("display_name=?")
+                args.append(displayName)
+            }
+            if let note = note {
+                sets.append("note=?")
+                args.append(note)
+            }
+            args.append(id)
+            run("UPDATE meters SET \(sets.joined(separator: ",")) WHERE id=?", args)
+        }
+    }
+
+    /// 删除设备行。读数记录保留（与原安卓版一致，不做级联删除）。
+    func deleteMeter(id: String) {
+        queue.sync {
+            run("DELETE FROM meters WHERE id=?", [id])
         }
     }
 

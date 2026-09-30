@@ -5,6 +5,9 @@ struct DeviceScanView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
 
+    /// 长按设备 → 写备注
+    @State private var noteDevice: DiscoveredDevice?
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -27,13 +30,18 @@ struct DeviceScanView: View {
                             ForEach(sortedDevices) { device in
                                 DeviceRow(device: device, isTarget: isTarget(device))
                                     .onTapGesture { select(device) }
+                                    .contextMenu {
+                                        Button { noteDevice = device } label: {
+                                            Label("写备注", systemImage: "square.and.pencil")
+                                        }
+                                    }
                             }
                         }
                         .padding(14)
                     }
                 }
 
-                Text("点击设备即连接 · 目标设备已标 ⭐")
+                Text("点击设备即连接 · 长按设备可写备注 · 目标设备已标 ⭐")
                     .font(.system(size: 12))
                     .foregroundColor(Theme.textMuted)
                     .padding(.bottom, 14)
@@ -57,6 +65,10 @@ struct DeviceScanView: View {
         }
         .navigationViewStyle(.stack)
         .onAppear { store.ble.startScan() }
+        .sheet(item: $noteDevice) { device in
+            DeviceNoteSheet(device: device)
+                .environmentObject(store)
+        }
         .onDisappear { store.ble.stopScan() }
     }
 

@@ -86,9 +86,15 @@ private struct MeterRow: View {
                     .padding(.top, 5)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(meter.displayName.isEmpty ? meter.id : meter.displayName)
+                    Text(meter.label)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(Theme.textPrimary)
+                    if meter.hasNote {
+                        Text("备注：\(meter.note)")
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.textSecondary)
+                            .lineLimit(2)
+                    }
                     Text(subtitle)
                         .font(.system(size: 11))
                         .foregroundColor(Theme.textMuted)

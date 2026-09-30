@@ -65,11 +65,21 @@ struct Meter: Identifiable, Hashable {
     var model: String = ""
     var status: String = ""
     var metadataJson: String = "{}"
+    /// 人工备注（安装位置、责任人、现场情况等自由文本）。
+    /// 对应 meters.note；旧库没有这一列时由 AppDatabase.migrate() 补上。
+    var note: String = ""
     var lastSeenAt: String?
     var createdAt: String = ""
     var updatedAt: String = ""
 
     var isConnected: Bool { status == "connected" }
+
+    var hasNote: Bool {
+        !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 列表里显示的名称：优先人工改过的显示名，否则退回设备标识。
+    var label: String { displayName.isEmpty ? id : displayName }
 
     /// `connectionPhase` / `rssi` pulled out of metadata_json.
     var connectionPhase: String {

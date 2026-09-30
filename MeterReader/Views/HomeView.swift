@@ -3,8 +3,16 @@ import SwiftUI
 /// 抄表主页 — port of `page_home.xml` + `MainActivity.initHome()`.
 struct HomeView: View {
     @EnvironmentObject private var store: AppStore
-    @State private var showDevicePicker = false
     @State private var confirmWrite = false
+
+    /// 一个 sheet 槽位放两种弹层：SwiftUI 在同一层级叠两个 .sheet 时只有最后一个生效。
+    @State private var activeSheet: ActiveSheet?
+
+    private enum ActiveSheet: Identifiable {
+        case devicePicker
+        case devices
+        var id: Int { hashValue }
+    }
 
     var body: some View {
         NavigationView {
@@ -33,11 +41,24 @@ struct HomeView: View {
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle("抄表主页")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { activeSheet = .devices } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                    .foregroundColor(Theme.accent)
+                    .accessibilityLabel("设备与备注")
+                }
+            }
         }
         .navigationViewStyle(.stack)
-        .sheet(isPresented: $showDevicePicker) {
-            DeviceScanView()
-                .environmentObject(store)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .devicePicker:
+                DeviceScanView().environmentObject(store)
+            case .devices:
+                DevicesView().environmentObject(store)
+            }
         }
         .alert("确认写入流量系数？", isPresented: $confirmWrite) {
             Button("取消", role: .cancel) {}
@@ -98,7 +119,7 @@ struct HomeView: View {
 
                 SecondaryButton(title: "选择设备", systemImage: "antenna.radiowaves.left.and.right") {
                     store.beginScan()
-                    showDevicePicker = true
+                    activeSheet = .devicePicker
                 }
 
                 DarkTextField(placeholder: "备注（可选）", text: $store.notesInput)

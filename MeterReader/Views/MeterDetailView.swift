@@ -6,15 +6,24 @@ struct MeterDetailView: View {
     let meter: Meter
 
     @State private var readings: [Reading] = []
-    @State private var showAdd = false
     @State private var addMeterId = ""
+    @State private var activeSheet: DetailSheet?
+
+    private enum DetailSheet: Identifiable {
+        case addReading
+        case note
+        var id: Int { hashValue }
+    }
+
+    /// 从 store 重新取一次，编辑备注后界面才会刷新。
+    private var current: Meter { store.meter(withId: meter.id) ?? meter }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Card {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(meter.displayName.isEmpty ? meter.id : meter.displayName)
+                        Text(current.label)
                             .font(.system(size: 17, weight: .bold))
                             .foregroundColor(Theme.textPrimary)
                         Text("表具 ID: \(meter.id)")
@@ -28,9 +37,31 @@ struct MeterDetailView: View {
                     }
                 }
 
+                // 人工备注：点一下就能改
+                Button { activeSheet = .note } label: {
+                    Card {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "square.and.pencil")
+                                .font(.system(size: 14))
+                                .foregroundColor(Theme.accent)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("人工备注")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Theme.textMuted)
+                                Text(current.hasNote ? current.note : "（点击添加备注）")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(current.hasNote ? Theme.textPrimary : Theme.textMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+
                 AccentButton(title: "+ 离线手工抄表", systemImage: "plus") {
                     addMeterId = meter.id
-                    showAdd = true
+                    activeSheet = .addReading
                 }
 
                 SectionEyebrow(text: "读数明细（\(readings.count) 条）")
@@ -57,14 +88,20 @@ struct MeterDetailView: View {
             .padding(14)
         }
         .background(Theme.background.ignoresSafeArea())
-        .navigationTitle(meter.displayName.isEmpty ? meter.id : meter.displayName)
+        .navigationTitle(current.label)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: load)
-        .sheet(isPresented: $showAdd, onDismiss: load) {
-            // Reuses the offline-entry sheet; an alert with TextField would
-            // require iOS 16, and this app targets iOS 15.
-            ManualReadingSheet(meterId: $addMeterId, meters: store.meters)
-                .environmentObject(store)
+        .sheet(item: $activeSheet, onDismiss: load) { sheet in
+            switch sheet {
+            case .addReading:
+                // Reuses the offline-entry sheet; an alert with TextField would
+                // require iOS 16, and this app targets iOS 15.
+                ManualReadingSheet(meterId: $addMeterId, meters: store.meters)
+                    .environmentObject(store)
+            case .note:
+                MeterInfoSheet(meter: current)
+                    .environmentObject(store)
+            }
         }
     }
 
