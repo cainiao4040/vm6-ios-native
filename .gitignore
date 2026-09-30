@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcodeproj/xcuserdata/
+out/
+Payload/
+*.ipa
+*.dSYM.zip
+
+# XcodeGen output (regenerated from project.yml in CI)
+MeterReader.xcodeproj/

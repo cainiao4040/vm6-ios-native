@@ -1,0 +1,54 @@
+[
+  {
+    "id": "B4:52:A9:D0:10:FB",
+    "serial_number": "",
+    "display_name": "VM6-2120147-KMJ",
+    "location": "",
+    "type": "flow-meter",
+    "model": "VM6",
+    "status": "offline",
+    "metadata_json": "{\"connectionPhase\":\"disconnected\",\"rssi\":-78}",
+    "last_seen_at": "2026-08-06 16:41:05.401143 +0000 UTC",
+    "created_at": "2026-04-09 13:51:13.30729 +0000 UTC",
+    "updated_at": "2026-08-06 16:41:05.575567235 +0000 UTC"
+  },
+  {
+    "id": "B4:52:A9:13:A4:77",
+    "serial_number": "",
+    "display_name": "VM6-2120156-KMJ",
+    "location": "",
+    "type": "flow-meter",
+    "model": "VM6",
+    "status": "connected",
+    "metadata_json": "{\"connectionPhase\":\"connected\",\"rssi\":-68}",
+    "last_seen_at": "2026-05-17 08:19:54.667807 +0000 UTC",
+    "created_at": "2026-05-17 08:19:54.667807 +0000 UTC",
+    "updated_at": "2026-05-17 08:19:56.506674517 +0000 UTC"
+  },
+  {
+    "id": "offline-manual",
+    "serial_number": "",
+    "display_name": "离线手工抄表",
+    "location": "",
+    "type": "flow-meter",
+    "model": "VM6",
+    "status": "offline",
+    "metadata_json": "{\"connectionPhase\":\"disconnected\"}",
+    "last_seen_at": "2026-08-07 04:46:53.502377 +0000 UTC",
+    "created_at": "2026-06-07 01:28:07.442792 +0000 UTC",
+    "updated_at": "2026-08-07 04:46:53.792379622 +0000 UTC"
+  },
+  {
+    "id": "94:DE:B8:92:FF:A2",
+    "serial_number": "",
+    "display_name": "VM6-2226161-KMJ",
+    "location": "",
+    "type": "flow-meter",
+    "model": "VM6",
+    "status": "offline",
+    "metadata_json": "{\"connectionPhase\":\"disconnected\",\"rssi\":-87}",
+    "last_seen_at": "2026-06-07 01:40:09.059005 +0000 UTC",
+    "created_at": "2026-06-07 01:29:22.422272 +0000 UTC",
+    "updated_at": "2026-06-07 01:40:10.362517341 +0000 UTC"
+  }
+]

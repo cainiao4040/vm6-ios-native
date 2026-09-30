@@ -1,0 +1,127 @@
+name: Build iOS IPA (unsigned)
+
+# Native Swift/SwiftUI build of the VM6 meter reader.
+# Ported by hand from the jadx-decompiled Java of MeterReaderOffline-v1.3.0.apk.
+#
+# Produces two IPAs as run artifacts, no Apple account or certificate needed:
+#   MeterReader-adhoc.ipa     -> TrollStore
+#   MeterReader-unsigned.ipa  -> AppSync Unified / AltStore / re-sign
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    name: MeterReader IPA
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain info
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          swift --version
+          xcodegen --version 2>/dev/null || echo "xcodegen not present yet"
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            export HOMEBREW_NO_AUTO_UPDATE=1
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Show generated project
+        run: |
+          ls -la
+          ls -la MeterReader.xcodeproj
+
+      # -target (not -scheme) so the build does not depend on scheme generation.
+      - name: Build (Release, unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MeterReader.xcodeproj \
+            -target MeterReader \
+            -configuration Release \
+            -sdk iphoneos \
+            CONFIGURATION_BUILD_DIR="$PWD/out" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build 2>&1 | tee build.log
+
+      - name: Show compile errors
+        if: failure()
+        run: |
+          echo "=================== ERRORS / WARNINGS ==================="
+          grep -nE "error:|warning:" build.log | head -80 || true
+          echo "=================== TAIL OF BUILD LOG ================="
+          tail -60 build.log || true
+
+      - name: Verify app bundle
+        run: |
+          set -e
+          APP="out/MeterReader.app"
+          test -d "$APP" || { echo "::error::MeterReader.app was not produced"; exit 1; }
+          echo "--- bundle ---"
+          ls -la "$APP"
+          echo "--- architectures ---"
+          lipo -info "$APP/MeterReader"
+          echo "--- Info.plist ---"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSBluetoothAlwaysUsageDescription' "$APP/Info.plist"
+          echo "--- bundled seed data ---"
+          ls -la "$APP"/*.json 2>/dev/null || echo "(no loose json)"
+
+      - name: Package unsigned IPA
+        run: |
+          set -e
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R out/MeterReader.app Payload/MeterReader.app
+          chmod +x Payload/MeterReader.app/MeterReader
+          rm -rf Payload/MeterReader.app/_CodeSignature
+          zip -qry MeterReader-unsigned.ipa Payload
+          echo "unsigned: $(du -h MeterReader-unsigned.ipa | cut -f1)"
+
+      - name: Ad-hoc sign and package IPA
+        run: |
+          set -e
+          codesign --force --sign - --timestamp=none Payload/MeterReader.app
+          codesign --verify --verbose=2 Payload/MeterReader.app || true
+          zip -qry MeterReader-adhoc.ipa Payload
+          echo "ad-hoc: $(du -h MeterReader-adhoc.ipa | cut -f1)"
+          ls -lh ./*.ipa
+
+      - name: Upload IPA artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeterReader-IPA
+          path: |
+            MeterReader-unsigned.ipa
+            MeterReader-adhoc.ipa
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 14
